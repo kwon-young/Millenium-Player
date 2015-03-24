@@ -1,3 +1,9 @@
+#Audio files
+*.mp3
+
+#Cmake directory
+build_gcc
+
 # Vim files
 *.swp
 *~
