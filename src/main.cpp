@@ -1,15 +1,80 @@
 #include <iostream>
 #include <SFML/Graphics.hpp>
 #include <libtools.h>
+#include "RtAudio.h"
 
-sf::Mutex m_sound;
-bool end_sound;
+typedef float  MY_TYPE;
+#define FORMAT RTAUDIO_FLOAT32
+#define SCALE  1.0;
 
-int sound(string_t music_file) {
+struct OutputData {
+  //decoder to read the music file
+  BassDecoder myDecoder;
+  //stereo sound
+  Signal right_out;
+  Signal left_out;
+  int playState;
+};
+
+// Interleaved buffers
+int output( void *outputBuffer, void * /*inputBuffer*/, unsigned int nBufferFrames,
+            double /*streamTime*/, RtAudioStreamStatus /*status*/, void *data )
+{
+  OutputData *oData = (OutputData*) data;
+
+  // In general, it's not a good idea to do file input in the audio
+  // callback function but I'm doing it here because I don't know the
+  // length of the file we are reading.
+  //unsigned int count = fread( outputBuffer, oData->channels * sizeof( MY_TYPE ), nBufferFrames, oData->fd);
+  //reset of the stereo sound
+  oData->right_out.reset();
+  oData->left_out.reset();
+  //read the next sample to be played
+  if (!oData->playState) {
+  oData->myDecoder.fetch(oData->left_out,
+                         oData->right_out);
+  }
+
+  memcpy((MY_TYPE*)(outputBuffer),
+         oData->left_out.samples,
+         nBufferFrames * sizeof( MY_TYPE));
+  memcpy((MY_TYPE*)(outputBuffer)+nBufferFrames,
+         oData->right_out.samples,
+         nBufferFrames * sizeof( MY_TYPE));
+
+  return oData->myDecoder.ended();
+}
+
+int main(int argc, char* argv[])
+{
+  unsigned int bufferFrames=0;
+  //this line is important to be right on the start of the program
+  //it configure the size of a signal
+  Signal::globalConfigurationFromPow2(48000, 512);
+
+  string_t music_file;
+  if (argc >1) {
+    //retrieve the name of the file to be played
+    music_file = argv[1];
+  }
+
+  RtAudio dac;
+  if ( dac.getDeviceCount() < 1 ) {
+    std::cout << "\nNo audio devices found!\n";
+    exit( 0 );
+  }
+
+  // Set our stream parameters for output only.
+  bufferFrames = Signal::size;
+  RtAudio::StreamParameters oParams;
+  oParams.deviceId = 0;
+  oParams.nChannels = 2;
+  oParams.firstChannel = 0;
 
   //load bass dll
   if (load_bass_procs("bass.dll") == -1) {
-    std::cerr << "Couldn't load the library bass.dll" << std::endl;
+    std::cerr << "Couldn't load the library bass.dll"
+              << std::endl;
     return 0xDEAD;
   }
   //initialize bass
@@ -17,92 +82,88 @@ int sound(string_t music_file) {
     std::cerr << "Couldn't initialize bass" << std::endl;
     return 0xDEAD;
   }
-  //decoder to read the music file
-  BassDecoder myDecoder;
-  myDecoder.open(music_file);
 
-  //windows driver to play the music file
-  WinmmDriver myDriver(Signal::frequency);
-  //time
-  sf::Clock t;
-  //stereo sound
-  Signal right_out;
-  Signal left_out;
-  bool sendSignalSuccess=false;
-  int length_send=0;
-  //sleep_time is the length of time to play a signal fully
-  //period in milisecond * by the size of a signal
-  int sleep_time=(float)(1.0/Signal::frequency)*1000000.0*Signal::size;
-  //retrieve the title and the artist of the music file
-  std::cout << "Title : " << string_t_to_std(myDecoder.name()) << std::endl;
-  std::cout << "Artist : " << string_t_to_std(myDecoder.author()) << std::endl;
-  //little fun with filter
-  AnalogBandPassFilter2 myLowPassLeft(100);
-  AnalogBandPassFilter2 myLowPassRight(100);
-  while(!end_sound) {
-    //reset of the stereo sound
-    right_out.reset();
-    left_out.reset();
-    //read the next sample to be played
-    myDecoder.fetch(left_out, right_out);
-    //apply the filter
-    myLowPassLeft.setFrequency(500+400*cos(t.getElapsedTime().asSeconds()*10));
-    myLowPassRight.setFrequency(500+400*cos(t.getElapsedTime().asSeconds()*10));
-    myLowPassLeft.step(&left_out);
-    myLowPassRight.step(&right_out);
-    std::cout << "frequency : " << 500+400*cos(t.getElapsedTime().asSeconds()*10) << std::endl;
-    //send the audio
-    do {
-      length_send = myDriver.getBufferedSamplesCount();
-      if (length_send > Signal::size*2) {
-        //wait if the buffer is still full
-        sf::sleep(sf::microseconds(sleep_time));
-      }
-      sendSignalSuccess = myDriver.pushStereoSignal(left_out, right_out);
-    }while(!sendSignalSuccess);
-  }
-}
+  OutputData data;
+  data.myDecoder.open(music_file);
 
-void calculus() {
+  oParams.deviceId = dac.getDefaultOutputDevice();
 
-}
-
-int main(int argc, char* argv[])
-{
-  //this line is important to be right on the start of the program
-  //it configure the size of a signal
-  Signal::globalConfigurationFromPow2(44100, 1024);
-
-  string_t music_file;
-  if (argc >1) {
-    //retrieve the name of the file to be played
-    music_file = argv[1];
-  }
-  end_sound=false;
-  sf::Thread th_sound(&sound, music_file);
-  th_sound.launch();
+  std::cout << "\nPlaying mp3 file " << music_file.toAnsiString()
+            << " (buffer frames = " << bufferFrames
+            << ")." << std::endl;
 
   //NEWindow window(sf::VideoMode(800, 400), "Millenium Player", sf::Font());
-  sf::Window window(sf::VideoMode(800, 400), "Millenium Player");
+  sf::RenderWindow window(sf::VideoMode(800, 400),
+                    "Millenium Player");
 
+  Interface player(sf::Vector2u(400, 400),
+                   sf::Vector2f(400, 400));
+  Button play(sf::Vector2f(300, 300), "play", sf::Font());
+  sf::Texture tx_play;
+  if(!tx_play.loadFromFile("PlayPause.png")) {
+    std::cerr << "couldn't load play button texture"
+              << std::endl;
+  }
+  tx_play.setSmooth(true);
+  sf::IntRect idle_area(0, 0, 400, 400);
+  sf::IntRect clicked_area(400, 0, 400, 400);
+  play.setTexture(tx_play, idle_area, clicked_area);
+  play.setPosition(250, 50);
+  play.setOutlineThickness(0);
+  player.addMouseCatcher(&play);
+  bool mousePresse=false, mem=false;
+  sf::Vector2i mousePos;
+  play.linkTo(&(data.playState));
+
+  RtAudio::StreamOptions options;
+  options.flags = RTAUDIO_NONINTERLEAVED;
+  try {
+    dac.openStream( &oParams,
+                    NULL,
+                    FORMAT,
+                    Signal::frequency,
+                    &bufferFrames,
+                    &output,
+                    (void *)&data,
+                    &options );
+    dac.startStream();
+  }
+  catch ( RtAudioError& e ) {
+    std::cout << '\n' << e.getMessage()
+              << '\n' << std::endl;
+    goto cleanup;
+  }
   //while the end of the file is not reached
   while(window.isOpen()) {
-
+    mousePresse=false;
     sf::Event event;
     while(window.pollEvent(event)) {
       switch(event.type) {
         case sf::Event::Closed:
-          m_sound.lock();
-          end_sound=true;
-          m_sound.unlock();
-          th_sound.wait();
+          try {
+            dac.stopStream();
+          } catch (RtAudioError& e) {
+            std::cout << '\n' << e.getMessage()
+                      << '\n' <<std::endl;
+            goto cleanup;
+          }
           window.close();
+          break;
+        case sf::Event::MouseButtonReleased:
+          mousePos = sf::Mouse::getPosition(window);
+          play.onMouseRelease(mousePos.x, mousePos.y);
           break;
       }
     }
-    sf::sleep(sf::milliseconds(1));
+
+    if (dac.isStreamRunning() == false) window.close();
+    window.clear();
+    window.draw(player);
+    window.display();
+    sf::sleep(sf::milliseconds(100));
   }
-  th_sound.wait();
+  cleanup:
+  dac.closeStream();
   return 0;
 }
 

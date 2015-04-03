@@ -28,4 +28,5 @@ target_link_libraries(
   general winmm
   general gdi32
   general jpeg
+  debug rtaudio_static
 )
