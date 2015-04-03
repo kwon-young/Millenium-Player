@@ -14,6 +14,8 @@ struct OutputData {
   Signal right_out;
   Signal left_out;
   int playState;
+  int forwardState;
+  bool push;
 };
 
 // Interleaved buffers
@@ -26,15 +28,6 @@ int output( void *outputBuffer, void * /*inputBuffer*/, unsigned int nBufferFram
   // callback function but I'm doing it here because I don't know the
   // length of the file we are reading.
   //unsigned int count = fread( outputBuffer, oData->channels * sizeof( MY_TYPE ), nBufferFrames, oData->fd);
-  //reset of the stereo sound
-  oData->right_out.reset();
-  oData->left_out.reset();
-  //read the next sample to be played
-  if (!oData->playState) {
-  oData->myDecoder.fetch(oData->left_out,
-                         oData->right_out);
-  }
-
   memcpy((MY_TYPE*)(outputBuffer),
          oData->left_out.samples,
          nBufferFrames * sizeof( MY_TYPE));
@@ -42,6 +35,7 @@ int output( void *outputBuffer, void * /*inputBuffer*/, unsigned int nBufferFram
          oData->right_out.samples,
          nBufferFrames * sizeof( MY_TYPE));
 
+  oData->push=true;
   return oData->myDecoder.ended();
 }
 
@@ -98,22 +92,34 @@ int main(int argc, char* argv[])
 
   Interface player(sf::Vector2u(400, 400),
                    sf::Vector2f(400, 400));
-  Button play(sf::Vector2f(300, 300), "play", sf::Font());
+  sf::IntRect idle_area(0, 0, 400, 400);
+  sf::IntRect clicked_area(400, 0, 400, 400);
+  Button play(sf::Vector2f(200, 200), "play", sf::Font());
   sf::Texture tx_play;
   if(!tx_play.loadFromFile("PlayPause.png")) {
     std::cerr << "couldn't load play button texture"
               << std::endl;
   }
   tx_play.setSmooth(true);
-  sf::IntRect idle_area(0, 0, 400, 400);
-  sf::IntRect clicked_area(400, 0, 400, 400);
   play.setTexture(tx_play, idle_area, clicked_area);
-  play.setPosition(250, 50);
-  play.setOutlineThickness(0);
+  play.setPosition(100, 100);
+  play.setWin98Looking(false);
   player.addMouseCatcher(&play);
+  Button forward(sf::Vector2f(200, 200), "forward", sf::Font());
+  sf::Texture tx_forward;
+  if(!tx_forward.loadFromFile("Forward.png")) {
+    std::cerr << "couldn't load forward button texture"
+              << std::endl;
+  }
+  tx_forward.setSmooth(true);
+  forward.setTexture(tx_forward, idle_area, clicked_area);
+  forward.setPosition(500, 100);
+  forward.setWin98Looking(false);
+  player.addMouseCatcher(&forward);
   bool mousePresse=false, mem=false;
   sf::Vector2i mousePos;
   play.linkTo(&(data.playState));
+  forward.linkTo(&(data.forwardState));
 
   RtAudio::StreamOptions options;
   options.flags = RTAUDIO_NONINTERLEAVED;
@@ -149,18 +155,38 @@ int main(int argc, char* argv[])
           }
           window.close();
           break;
+        case sf::Event::MouseButtonPressed:
+          mousePos = sf::Mouse::getPosition(window);
+          if(forward.onMousePress(mousePos.x, mousePos.y)) {
+            forward.forceOn();
+          }
+          break;
+
         case sf::Event::MouseButtonReleased:
           mousePos = sf::Mouse::getPosition(window);
           play.onMouseRelease(mousePos.x, mousePos.y);
+          forward.forceOff();
           break;
       }
+    }
+
+    if (data.push) {
+      //reset of the stereo sound
+      data.right_out.reset();
+      data.left_out.reset();
+      //read the next sample to be played
+      if (!data.playState) {
+      data.myDecoder.fetch(data.left_out,
+                             data.right_out);
+      }
+      data.push=0;
     }
 
     if (dac.isStreamRunning() == false) window.close();
     window.clear();
     window.draw(player);
     window.display();
-    sf::sleep(sf::milliseconds(100));
+    sf::sleep(sf::milliseconds(1));
   }
   cleanup:
   dac.closeStream();
