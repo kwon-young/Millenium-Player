@@ -1,3 +1,5 @@
+//je fais de la merde
+
 #include <iostream>
 #include <SFML/Graphics.hpp>
 #include <libtools.h>
