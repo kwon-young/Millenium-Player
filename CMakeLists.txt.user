@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 3.3.2, 2015-04-02T08:31:52. -->
+<!-- Written by QtCreator 3.3.2, 2015-04-18T12:37:55. -->
 <qtcreator>
  <data>
   <variable>EnvironmentId</variable>
@@ -157,7 +157,7 @@
      <value type="int">14</value>
     </valuelist>
     <value type="QString" key="CMakeProjectManager.CMakeRunConfiguation.Title">Millenium-Player</value>
-    <value type="QString" key="CMakeProjectManager.CMakeRunConfiguration.Arguments">&quot;I'm yours.mp3&quot;</value>
+    <value type="QString" key="CMakeProjectManager.CMakeRunConfiguration.Arguments">&quot;I'm yours.mp3&quot; &quot;chao_chao.mp3&quot;</value>
     <value type="bool" key="CMakeProjectManager.CMakeRunConfiguration.UseTerminal">false</value>
     <value type="QString" key="CMakeProjectManager.CMakeRunConfiguration.UserWorkingDirectory"></value>
     <value type="int" key="PE.EnvironmentAspect.Base">2</value>
