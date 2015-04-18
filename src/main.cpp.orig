@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*
  *This program is a simple music player
  *
@@ -21,6 +22,9 @@
  *TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
  *OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+=======
+//je fais de la merde
+>>>>>>> 4f69e06c5475d03839df0c9f4b474ff40f000dde
 
 #include <iostream>
 #include <SFML/Graphics.hpp>
@@ -251,5 +255,4 @@ int main(int argc, char* argv[])
   dac.closeStream();
   return 0;
 }
-
 
